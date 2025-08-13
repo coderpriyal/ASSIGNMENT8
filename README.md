@@ -1,55 +1,55 @@
-Insurance Claim Recovery System
+🚀 Insurance Claim Recovery System
+A high-performance, fault-tolerant Java system that recovers and processes pending insurance claims from a CSV file with strict ordering, concurrency, retry, logging, and fraud monitoring.
 
-Overview
-This is a multi-threaded Java program that processes insurance claims concurrently while ensuring per-policy order, idempotency, retry handling, fraud monitoring, and accurate final reporting.
+🧩 Key Features
+✅ Parallel processing with a configurable worker pool
+✅ Per-policy FIFO ordering (no two claims of same policy processed together)
+✅ Priority preemption (URGENT claims jump the queue)
+✅ Idempotency: each ClaimID processed exactly once
+✅ Retry mechanism for transient failures with timeout support
+✅ Fraud detection and auto-throttling with sliding window
+✅ Thread-safe, atomic logging (audit.log)
+✅ Final reporting (summary.txt) with accurate counts
 
-Key Features
+🏗️ Design Decisions
+🔁 Per-Policy Serial Processing
+We maintain a synchronized queue per PolicyNumber.
 
-Per-Policy Serial Processing: Claims for the same policy are processed sequentially using a dedicated queue and synchronized lock per policy. This ensures FIFO processing and thread safety.
+Claims are processed in arrival order per policy using fine-grained locking.
 
-Priority Preemption: URGENT claims are placed in a global priority queue that always prefers urgent over normal claims. To avoid starvation, normal claims are also dequeued in FIFO order if no urgent claims are pending.
+This ensures thread safety and preserves claim order without global locking.
 
-Idempotency: A thread-safe ConcurrentHashMap tracks processed ClaimIDs. Duplicate or retried claims are skipped if already processed.
+🔐 Deadlock Avoidance
+We avoid deadlocks by acquiring locks in a consistent global order (alphabetical PolicyNumber).
 
-Fraud Detection & Throttling: A background monitor pauses intake if >5 suspicious claims (Accident & amount ≥ 400,000) are seen in a 30s sliding window. This simulates a fraud investigation.
+No nested locking across queues; retry re-insertion is always safe.
 
-External Check with Timeout & Retry: Claims interact with an external check simulated to randomly pass/fail. Timeouts and transient failures are retried up to R times. Requeued claims retain their policy order.
+🚨 Priority Handling
+A custom PriorityBlockingQueue favors URGENT claims globally.
 
-Deadlock Avoidance: Locks are acquired using a consistent global lock ordering by sorting policy IDs before acquisition. This avoids circular waits.
+Normal claims are not starved — we apply FIFO after urgent claims are cleared.
 
-Logging & Summary: All claim transitions are logged to audit.log atomically per line. A final summary.txt is generated with stats and wall-clock timing.
+Ensures fairness without blocking urgent claims.
 
-Configuration
-Editable via config.properties:
+♻️ Idempotency
+A ConcurrentHashMap tracks processed ClaimIDs.
 
-worker.count=8
+Claims with the same ID (due to retry or duplicate input) are ignored on reprocessing.
 
-backlog.capacity=100
+🔍 Fraud Detection & Throttling
+Claims with ClaimType == "Accident" and ClaimAmount ≥ ₹400,000 are flagged.
 
-retry.limit=3
+A sliding window of 30 seconds checks frequency of such claims.
 
-external.timeout.ms=3000
+If 5+ suspicious claims are seen, intake pauses for 2 seconds to simulate investigation.
 
-fraud.window.sec=30
+⚙️ Configurable Parameters
+Defined in config.properties:
 
-fraud.threshold=5
-
-How We Ensure:
-
-Per-Policy Ordering:
-Each policy gets its own queue (Map<Policy, Queue>) and synchronized lock. Claims are dequeued in submission order, and only one worker can handle a claim per policy at a time.
-
-Deadlock Avoidance:
-Locks are always acquired in lexicographical order of policy IDs. This consistent locking order prevents deadlock during concurrent queue access.
-
-Priority Preemption & Starvation Avoidance:
-Claims are stored in a PriorityBlockingQueue that prioritizes urgent claims. Normal claims are dequeued fairly after urgent ones are drained. This avoids starvation via time-based fair polling.
-
-Idempotency:
-Processed claims are stored in a ConcurrentHashMap. Duplicate ClaimIDs are filtered before processing begins.
-
-Trade-offs:
-
-Slightly higher memory usage due to per-policy queues and duplicate tracking.
-
-Some increased complexity in managing retry re-queuing per policy while preserving order.
+Key	Description	Default
+worker.count	Number of parallel worker threads	8
+backlog.capacity	Max queue size before intake pauses	100
+retry.limit	Max retry attempts for transient fails	3
+external.timeout.ms	Max wait time for external check (ms)	3000
+fraud.window.sec	Sliding window for fraud (in seconds)	30
+fraud.threshold	Suspicious claim threshold	5

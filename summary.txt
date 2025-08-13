@@ -1,0 +1,8 @@
+Total unique claims processed: 120
+Approved: 98
+Escalated: 8
+Rejected: 3
+Permanent Failures: 11
+Total amount paid: 10991291
+Average attempts per claim: 0.60
+Total wall-clock time (ms): 76282
